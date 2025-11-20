@@ -1,0 +1,74 @@
+
+```bash
+level03@OverRide:~$ ls -l
+total 8
+-rwsr-s---+ 1 level04 users 7677 Sep 10  2016 level03
+level03@OverRide:~$ file level03 
+level03: setuid setgid ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0x9e834af52f4b2400d5bd38b3dac04d1a5faa1729, not stripped
+```
+
+Reversed in c:
+```c
+int decrypt(char a1)
+{
+  unsigned int len; // [esp+24h] [ebp-24h]
+  char str[28]; // [esp+2Bh] [ebp-1Dh] BYREF
+
+  *(_DWORD *)&v4[17] = __readgsdword(0x14u);
+
+  strcpy(str, "Q}|u`sfg~sf{}|a3");
+  len = strlen(str);
+  for (unsigned int i = 0; i < len; ++i )
+  {
+    str[i] ^= a1;
+  }
+  if (strcmp(str, "Congratulations!") == 0)
+  {
+    return system("/bin/sh");
+  }
+  return puts("\nInvalid Password");
+}
+```
+
+We see that we xor a weird string to create a congratulations string
+Because we reverse xor operation, we gonna create a code to reverse this function:
+```c
+int main(void)
+{
+    char test[29];
+    char str[] = "Congratulations!";
+    char res[] = "Q}|u`sfg~sf{}|a3";
+
+    
+    for (size_t i = 0; i <= 21; i++)
+    {
+        size_t len;
+
+        strcpy(test, str);
+        len = strlen(test);
+        for (size_t j = 0; j < len; j++)
+        {
+            test[j] ^= i;
+        }
+        if (strcmp(test, res) == 0)
+        {
+            printf("value: %ld\n", i);
+            return 0;
+        }
+    }
+    return 0;
+}
+```
+
+This ouput `18` and with that we can calculate what we need to input:
+322424845 - 18 = 322424827
+
+```bash
+level03@OverRide:~$ ./level03 
+***********************************
+*		level03		**
+***********************************
+Password:322424827
+$ cat /home/users/level04/.pass
+kgv3tkEb9h2mLkRsPkXRfc2mHbjMxQzvb2FrgKkf
+```

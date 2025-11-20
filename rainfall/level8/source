@@ -1,0 +1,51 @@
+
+char **auth;
+char *service;
+
+int main(int argc, const char **argv, const char **envp)
+{
+  char s[136];
+
+  while (1)
+  {
+    printf("%p, %p \n", auth, service);
+
+    if (fgets(s, 128, stdin) == 0)
+    {
+      break;
+    }
+
+    if (memcmp(s, "auth ", 5u) == 0)
+    {
+      auth = malloc(4u);
+      *auth = NULL;
+      if (strlen(&s[5]) <= 30u)
+      {
+        strcpy((char *)auth, &s[5]);
+      }
+    }
+
+    if (memcmp(s, "reset", 5u) == 0)
+    {
+      free(auth);
+    }
+
+    if (memcmp(s, "service", 6u) == 0)
+    {
+      service = strdup(&s[7]);
+    }
+
+    if (memcmp(s, "login", 5u) == 0)
+    {
+      if (auth[8] != '\0')
+      {
+        system("/bin/sh");
+      }
+      else
+      {
+        fwrite("Password:\n", 1u, 10u, stdout);
+      }
+    }
+  }
+  return 0;
+}

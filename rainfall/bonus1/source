@@ -1,0 +1,19 @@
+
+int main(int argc, const char **argv, const char **envp)
+{
+    char dest[40];
+    int len;
+
+    len = atoi(argv[1]);
+    if (len > 9)
+    {
+        return 1;
+    }
+    memcpy(dest, argv[2], 4 * len);
+    if (len == 1464814662)
+    {
+        execl("/bin/sh", "sh", 0);
+    }
+
+    return 0;
+}

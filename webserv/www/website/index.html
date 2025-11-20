@@ -1,0 +1,438 @@
+<!-- Main HTML5 Document -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Meta tags for character encoding and responsive viewport -->
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>42 Webserv Happy Tester</title>
+
+    <!-- External CSS dependencies -->
+    <link href="js/tailwind.min.css" rel="stylesheet">
+    <link href="js/fontawesome.min.css" rel="stylesheet">
+
+    <!-- Custom styles for animations and layout -->
+    <style>
+        /* Card hover animation */
+        .method-card {
+            transition: transform 0.2s;
+        }
+        .method-card:hover {
+            transform: translateY(-5px);
+        }
+
+        /* Download item styling */
+        .download-item {
+            display: flex;
+            align-items: center;
+            padding: 0.5rem;
+            border-radius: 0.5rem;
+            transition: background-color 0.2s;
+        }
+        .download-item:hover {
+            background-color: rgba(0, 0, 0, 0.05);
+        }
+
+        /* File icon container styling */
+        .file-icon {
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 0.5rem;
+            margin-right: 1rem;
+        }
+
+        /* File information container */
+        .file-info {
+            flex-grow: 1;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Main container with responsive padding -->
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header section -->
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-indigo-600 mb-2">42 Webserv Happy Tester</h1>
+            <p class="text-gray-600">Let's test our webserver implementation :)</p>
+        </header>
+
+        <!-- Main grid layout for test cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- HTTP Methods Testing Card -->
+            <div class="bg-white rounded-lg shadow-lg p-6 method-card">
+                <h2 class="text-xl font-semibold mb-4 text-indigo-600">HTTP Methods</h2>
+                <div class="space-y-4">
+                    <!-- Test buttons for different HTTP methods -->
+                    <button onclick="sendRequest('GET')" class="w-full bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600">
+                        Test GET
+                    </button>
+                    <button onclick="sendRequest('POST')" class="w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600">
+                        Test POST
+                    </button>
+                    <button onclick="sendRequest('DELETE')" class="w-full bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600">
+                        Test DELETE
+                    </button>
+                </div>
+            </div>
+
+            <!-- File Upload Card -->
+            <div class="bg-white rounded-lg shadow-lg p-6 method-card">
+                <h2 class="text-xl font-semibold mb-4 text-indigo-600">File Upload</h2>
+                <form id="uploadForm" class="space-y-4">
+                    <input type="file" id="fileUpload" class="w-full p-2 border rounded">
+                    <button type="submit" class="w-full bg-purple-500 text-white py-2 px-4 rounded hover:bg-purple-600">
+                        Upload File
+                    </button>
+                </form>
+            </div>
+
+            <!-- File Download Card with sample files -->
+            <div class="bg-white rounded-lg shadow-lg p-6 method-card">
+                <h2 class="text-xl font-semibold mb-4 text-indigo-600">File Download</h2>
+                <div class="space-y-2">
+                    <!-- Sample text file download -->
+                    <a href="/files/sample.txt" class="download-item group">
+                        <div class="file-icon bg-blue-100 text-blue-500">
+                            <i class="fas fa-file-alt text-xl"></i>
+                        </div>
+                        <div class="file-info">
+                            <div class="font-medium text-gray-700">Sample Text</div>
+                            <div class="text-sm text-gray-500">Plain text file</div>
+                        </div>
+                        <div class="text-teal-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i class="fas fa-download"></i>
+                        </div>
+                    </a>
+
+                    <!-- Video file download -->
+                    <a href="/files/RickRoll.mp4" class="download-item group">
+                        <div class="file-icon bg-red-100 text-red-500">
+                            <i class="fas fa-file-video text-xl"></i>
+                        </div>
+                        <div class="file-info">
+                            <div class="font-medium text-gray-700">Never Gonna Give You Up!</div>
+                            <div class="text-sm text-gray-500">MP4 video file</div>
+                        </div>
+                        <div class="text-teal-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i class="fas fa-download"></i>
+                        </div>
+                    </a>
+
+                    <!-- Large file download for chunked transfer testing -->
+                    <a href="/files/large.pdf" class="download-item group">
+                        <div class="file-icon bg-purple-100 text-purple-500">
+                            <i class="fas fa-file-pdf text-xl"></i>
+                        </div>
+                        <div class="file-info">
+                            <div class="font-medium text-gray-700">Large File</div>
+                            <div class="text-sm text-gray-500">Chunked transfer test</div>
+                        </div>
+                        <div class="text-teal-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <i class="fas fa-download"></i>
+                        </div>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Directory Listing and Redirection Test Card -->
+            <div class="bg-white rounded-lg shadow-lg p-6 method-card">
+                <h2 class="text-xl font-semibold mb-4 text-indigo-600">Other Tests</h2>
+                <div class="space-y-4">
+                    <a href="/files/" class="block w-full text-center bg-yellow-500 text-white py-2 px-4 rounded hover:bg-yellow-600">
+                        View Directory Contents
+                    </a>
+                    <a href="/redirect/" class="block w-full text-center bg-pink-500 text-white py-2 px-4 rounded hover:bg-pink-600">
+                        Test Redirect
+                    </a>
+                    <a href="/nowhere/" class="block w-full text-center bg-red-800 text-white py-2 px-4 rounded hover:bg-red-900 font-medium">
+                        Custom Error Page
+                    </a>
+                </div>
+            </div>
+
+            
+            <!-- Simple Form Card -->
+            <div class="bg-white rounded-lg shadow-lg p-6 method-card">
+                <h2 class="text-xl font-semibold mb-4 text-indigo-600">Simple Form for POST</h2>
+                <form id="simpleForm" class="space-y-4">
+                    <div>
+                        <label for="name" class="block text-gray-700 mb-2">Name:</label>
+                        <input type="text" id="name" name="name" required 
+                            class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label for="hobby" class="block text-gray-700 mb-2">Your hobby:</label>
+                        <input type="text" id="hobby" name="hobby" required 
+                            class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-500 text-white py-2 px-4 rounded hover:bg-indigo-600">
+                        Submit
+                    </button>
+                </form>
+                <div id="formResponse" class="mt-4 p-4 bg-gray-100 rounded-lg hidden">
+                    <!-- Form response will appear here -->
+                </div>
+            </div>
+
+             <!-- Calculator Card -->
+             <div class="bg-white rounded-lg shadow-lg p-6 method-card">
+                <h2 class="text-xl font-semibold mb-4 text-indigo-600">Calculator for CGI Test</h2>
+                <div id="calcResult" class="mb-4 p-4 bg-gray-100 rounded-lg text-center text-lg font-semibold">
+                    Result will appear here...
+                </div>
+                <form id="calculatorForm" class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label for="num1" class="block text-gray-700 mb-2">Number 1:</label>
+                            <input type="number" id="num1" name="num1" required 
+                                class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label for="num2" class="block text-gray-700 mb-2">Number 2:</label>
+                            <input type="number" id="num2" name="num2" required 
+                                class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-4 gap-2">
+                        <button type="button" onclick="calculate('+')" class="bg-green-500 text-white py-2 px-4 rounded hover:bg-green-600">+</button>
+                        <button type="button" onclick="calculate('-')" class="bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600">-</button>
+                        <button type="button" onclick="calculate('*')" class="bg-yellow-500 text-white py-2 px-4 rounded hover:bg-yellow-600">×</button>
+                        <button type="button" onclick="calculate('/')" class="bg-red-500 text-white py-2 px-4 rounded hover:bg-red-600">÷</button>
+                    </div>
+                </form>
+            </div>
+
+            
+            <!-- Request Details Card  -->
+            <div class="bg-white rounded-lg shadow-lg p-6 method-card">
+                <h2 class="text-xl font-semibold mb-4 text-indigo-600">Last Request Details</h2>
+                <div id="requestDetails" class="space-y-2">
+                    <div class="bg-gray-100 p-4 rounded-lg">
+                        <p class="font-semibold text-gray-700">Method: <span id="reqMethod" class="font-normal">-</span></p>
+                        <p class="font-semibold text-gray-700">URL: <span id="reqUrl" class="font-normal">-</span></p>
+                        <div class="mt-2">
+                            <p class="font-semibold text-gray-700">Headers:</p>
+                            <pre id="reqHeaders" class="text-sm bg-white p-2 rounded mt-1 overflow-x-auto">-</pre>
+                        </div>
+                        <div class="mt-2">
+                            <p class="font-semibold text-gray-700">Body:</p>
+                            <pre id="reqBody" class="text-sm bg-white p-2 rounded mt-1 overflow-x-auto">-</pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Response Display Card -->
+            <div class="bg-white rounded-lg shadow-lg p-6 method-card">
+                <h2 class="text-xl font-semibold mb-4 text-indigo-600">Response</h2>
+                <div id="response" class="bg-gray-100 p-4 rounded-lg min-h-[100px] whitespace-pre-wrap">
+                    Response will appear here...
+                </div>
+            </div>
+
+            <!-- CGI GET Test Card -->
+            <div class="bg-white rounded-lg shadow-lg p-6 method-card">
+                <h2 class="text-xl font-semibold mb-4 text-indigo-600">CGI GET Test</h2>
+                <div id="cgiGetResult" class="mb-4 p-4 bg-gray-100 rounded-lg text-center text-lg font-semibold">
+                    CGI GET response will appear here...
+                </div>
+                <button onclick="testCgiGet()" class="w-full bg-blue-800 text-white py-2 px-4 rounded hover:bg-blue-900">
+                    Test CGI GET
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript for handling HTTP requests and form submissions -->
+    <script>
+        // Function to send HTTP requests (GET, POST, DELETE)
+        async function sendRequest(method) {
+            try {
+                let url, body;
+                
+                if (method === 'DELETE') {
+                    url = '/files/file_for_delete.txt';
+                    body = null;
+                } else if (method === 'POST') {
+                    const formData = new FormData();
+                    const blob = new Blob(['This file was created by POST for DELETE testing'], 
+                                       {type: 'text/plain'});
+                    formData.append('file', blob, 'file_for_delete.txt');
+                    url = '/files/';
+                    body = formData;
+                } else {
+                    url = '/get_test.html';
+                    body = null;
+                }
+
+                document.getElementById('reqMethod').textContent = method;
+                document.getElementById('reqUrl').textContent = url;
+                document.getElementById('reqHeaders').textContent = method === 'POST' ? 
+                    'Content-Type: multipart/form-data' : 'Content-Type: text/plain';
+                document.getElementById('reqBody').textContent = 
+                    method === 'POST' ? 'File: file_for_delete.txt' : (body || 'No body');
+
+                const response = await fetch(url, {
+                    method: method,
+                    body: body
+                });
+
+                const responseDiv = document.getElementById('response');
+                responseDiv.textContent = `${method} Response:\nStatus: ${response.status}\nStatusText: ${response.statusText}`;
+
+                const text = await response.text();
+                responseDiv.textContent += '\nResponse: ' + text;
+            } catch (error) {
+                document.getElementById('response').textContent = `Error: ${error.message}`;
+            }
+        }
+        // CGI GET test function
+        async function testCgiGet() {
+            // Update request details
+            document.getElementById('reqMethod').textContent = 'GET';
+            document.getElementById('reqUrl').textContent = '/cgi/calc.php';
+            document.getElementById('reqHeaders').textContent = 'Accept: text/plain';
+            document.getElementById('reqBody').textContent = 'No body';
+
+            try {
+                const response = await fetch('/cgi/calc.php', {
+                    method: 'GET',
+                    headers: {
+                        'Accept': 'text/plain'
+                    }
+                });
+
+                const text = await response.text();
+                
+                // Update CGI GET result
+                document.getElementById('cgiGetResult').textContent = text;
+
+                // Update response display
+                const responseDiv = document.getElementById('response');
+                responseDiv.textContent = `CGI GET Response:\nStatus: ${response.status}\nStatusText: ${response.statusText}\nResponse: ${text}`;
+            } catch (error) {
+                document.getElementById('response').textContent = `CGI GET Error: ${error.message}`;
+            }
+        }
+        // File upload form handler
+        document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById('fileUpload');
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a file first');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            document.getElementById('reqMethod').textContent = 'POST';
+            document.getElementById('reqUrl').textContent = '/upload/';
+            document.getElementById('reqHeaders').textContent = 'Content-Type: multipart/form-data';
+            document.getElementById('reqBody').textContent = `File: ${file.name} (${file.size} bytes)`;
+
+            try {
+                const response = await fetch('/upload/', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const responseDiv = document.getElementById('response');
+                responseDiv.textContent = `Upload Response:\nStatus: ${response.status}\nStatusText: ${response.statusText}`;
+
+                const text = await response.text();
+                responseDiv.textContent += '\nResponse: ' + text;
+            } catch (error) {
+                document.getElementById('response').textContent = `Upload Error: ${error.message}`;
+            }
+        });
+
+        // Calculator function
+        async function calculate(operator) {
+            const num1 = document.getElementById('num1').value;
+            const num2 = document.getElementById('num2').value;
+
+            if (!num1 || !num2) {
+                alert('Please enter both numbers');
+                return;
+            }
+
+            const formData = new URLSearchParams();
+            formData.append('num1', num1);
+            formData.append('num2', num2);
+            formData.append('operator', operator);
+
+            // Update request details
+            document.getElementById('reqMethod').textContent = 'POST';
+            document.getElementById('reqUrl').textContent = '/cgi/calc.php';
+            document.getElementById('reqHeaders').textContent = 'Content-Type: application/x-www-form-urlencoded';
+            document.getElementById('reqBody').textContent = formData.toString();
+
+            try {
+                const response = await fetch('/cgi/calc.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: formData
+                });
+
+                const text = await response.text();
+                
+                // Update calculator result
+                document.getElementById('calcResult').textContent = text;
+
+                // Update response display
+                const responseDiv = document.getElementById('response');
+                responseDiv.textContent = `Calculator Response:\nStatus: ${response.status}\nStatusText: ${response.statusText}\nResponse: ${text}`;
+            } catch (error) {
+                document.getElementById('response').textContent = `Calculator Error: ${error.message}`;
+            }
+        }
+
+        // Simple form handler
+        document.getElementById('simpleForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const name = formData.get('name');
+            const hobby = formData.get('hobby');
+
+            // Update request details
+            document.getElementById('reqMethod').textContent = 'POST';
+            document.getElementById('reqUrl').textContent = '/form';
+            document.getElementById('reqHeaders').textContent = 'Content-Type: application/x-www-form-urlencoded';
+            document.getElementById('reqBody').textContent = `name=${name}&hobby=${hobby}`;
+
+            // Update form response immediately (client-side only for now)
+            const formResponse = document.getElementById('formResponse');
+            formResponse.textContent = `Nice to meet you ${name}! ${hobby} is really interesting!`;
+            formResponse.classList.remove('hidden');
+
+            try {
+                const response = await fetch('.', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: `name=${encodeURIComponent(name)}&hobby=${encodeURIComponent(hobby)}`
+                });
+
+                // Update response display
+                const responseDiv = document.getElementById('response');
+                responseDiv.textContent = `Form Submission Response:\nStatus: ${response.status}\nStatusText: ${response.statusText}`;
+                
+                const text = await response.text();
+                responseDiv.textContent += '\nResponse: ' + text;
+            } catch (error) {
+                document.getElementById('response').textContent = `Form Submission Error: ${error.message}`;
+            }
+
+            // Clear form
+            e.target.reset();
+        });
+    </script>
+</body>
+</html>

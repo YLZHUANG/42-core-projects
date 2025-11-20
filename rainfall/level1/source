@@ -1,0 +1,12 @@
+int run(void)
+{
+    fwrite("Good... Wait what?\n", 1, 19, stdout);
+    return system("/bin/sh");
+}
+
+int main(int ac, const char **av, const char **env)
+{
+    char s[64];
+    
+    return gets(s);
+}

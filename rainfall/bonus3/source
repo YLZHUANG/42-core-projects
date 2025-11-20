@@ -1,0 +1,26 @@
+
+int main(int agrc, const char **agrv, const char **envp)
+{
+    char ptr[132];
+    FILE *pass;
+
+    pass = fopen("/home/user/end/.pass", "r");
+    memset(ptr, 0, sizeof(ptr));
+    if (ptr == NULL || argc != 2)
+    {
+        return -1;
+    }
+    fread(ptr, 1, 66, pass);
+    ptr[65] = '\0';
+    ptr[atoi(agrv[1])] = '\0';
+    fclose(pass);
+    if (strcmp(ptr, argv[1]) == 0)
+    {
+        execl("/bin/sh", "sh", 0);
+    }
+    else
+    {
+        puts(&ptr[66]);
+    }
+    return 0;
+}

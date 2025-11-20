@@ -1,0 +1,53 @@
+
+
+class N
+{
+    private:
+        // ... 0x4
+        char _annotation[22];
+        // ... 0x26
+        int _value;
+        
+        // ... 0x68
+        int _other_value;
+
+    public:
+        N(int a2)
+        {
+            this->_value = a2;
+        }
+
+        void *setAnnotation(char *s)
+        {
+            size_t s_len;
+
+            s_len = strlen(s);
+            return memcpy(annotation, s, s_len);
+        }
+
+        int operator+(N &other)
+        {
+            return this->_other_value + other->_other_value;
+        }
+        int operator-(N &other)
+        {
+            return this->_other_value - other->_other_value;
+        }
+};
+
+int main(int argc, const char **argv, const char **envp)
+{
+    N *v3;
+    N *v4;
+
+    if (argc <= 1)
+    {
+        exit(1);
+    }
+
+    v3 = new N(5);
+    v4 = new N(6);
+    v3->setAnnotation(argv[1]);
+
+    return (**(int (__cdecl ***)(N *, N *))v4)(v4, v3);
+}

