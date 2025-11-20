@@ -60,7 +60,7 @@ Skills covered:
 | Project | Date | Score | Notes |
 |--------|-------|--------|--------|
 | [**Born2beroot**](./Born2beroot)  | ~3 years ago | **125/100** |
-| **NetPractice** | ~2 years ago | **100/100** | System and Network Configuration, no repo |
+| **NetPractice** | ~2 years ago | **100/100** | System and Network Configuration |
 | [**Inception**](./Inception) | 5 months ago | **100/100** |
 
 ---
@@ -117,11 +117,11 @@ All C++ exercises focused on OOP, polymorphism, memory management, templates, ST
 
 # 🔐 Cybersecurity Track (Elective)
 
-| Project | Date | Score |
-|--------|-------|--------|
-| [**snow-crash**](./snow-crash) | ~2 months ago | **125/100** |
-| [**override**](./override) | ~1 month ago | **125/100** |
-| [**rainfall**](./rainfall) | ~1 month ago | **125/100** |
+| Project | Date | Score | Notes |
+|--------|-------|--------|--------|
+| [**snow-crash**](./snow-crash) | ~2 months ago | **125/100** | Team project with sbalesme from 42 |
+| [**override**](./override) | ~1 month ago | **125/100** | Team project with sbalesme from 42 |
+| [**rainfall**](./rainfall) | ~1 month ago | **125/100** | Team project with sbalesme from 42 |
 
 ---
 
